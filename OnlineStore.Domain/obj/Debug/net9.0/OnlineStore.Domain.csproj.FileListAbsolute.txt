@@ -1,0 +1,11 @@
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\bin\Debug\net9.0\OnlineStore.Domain.deps.json
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\bin\Debug\net9.0\OnlineStore.Domain.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\bin\Debug\net9.0\OnlineStore.Domain.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\OnlineStore.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\OnlineStore.Domain.AssemblyInfoInputs.cache
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\OnlineStore.Domain.AssemblyInfo.cs
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\OnlineStore.Domain.csproj.CoreCompileInputs.cache
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\OnlineStore.Domain.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\refint\OnlineStore.Domain.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\OnlineStore.Domain.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Domain\obj\Debug\net9.0\ref\OnlineStore.Domain.dll
