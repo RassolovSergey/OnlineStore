@@ -1,35 +1,64 @@
 using Microsoft.EntityFrameworkCore;
-using OnlineStore.Infrastructure.Persistence;
-using OnlineStore.Infrastructure.Extensions;
+using OnlineStore.Infrastructure.Persistence;        // AppDbContext
+using OnlineStore.Infrastructure.Extensions;        // AddInfrastructure, AddJwtAuthentication
+using OnlineStore.Application.Extensions;
+using OnlineStore.Api.Middlewares;
+using FluentValidation.AspNetCore;
+using FluentValidation;
+using OnlineStore.Application.Validation.Auth;
+using System.Threading.RateLimiting;
+using OnlineStore.Api.Extensions;           // AddMappings или AddApplication
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Добавляем EF Core и PostgreSQL
-// Используем строку подключения из конфигурации
+// ---------- БД (API владеет строкой подключения) ----------
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddInfrastructure();   // Добавляем инфраструктурные зависимости
-builder.Services.AddJwtAuthentication(builder.Configuration); // Добавляем JWT-аутентификацию
+// ---------- Регистрация слоёв ----------
+builder.Services.AddInfrastructure();                         // репозитории + инфраструктурные сервисы
+builder.Services.AddJwtAuthentication(builder.Configuration); // схема JWT
+builder.Services.AddMappings();                               // профили AutoMapper из Application
 
 
-builder.Services.AddControllers();  // Добавляем контроллеры
-builder.Services.AddEndpointsApiExplorer(); // Добавляем поддержку Swagger для документации API
-builder.Services.AddSwaggerGen(); // Добавляем Swagger для UI
+// ---------- ASP.NET Core сервисы ----------
+builder.Services.AddControllers();
+
+
+// Добавляем валидацию FluentValidation
+// Используем AddFluentValidation для автоматической регистрации валидаторов
+builder.Services.AddFluentValidationAutoValidation(opt =>
+{
+    // Отключаем автоматическую проверку DataAnnotations,
+    // чтобы не дублировались сообщения.
+    opt.DisableDataAnnotationsValidation = true;
+});
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerWithJwt(); // Swagger с JWT
+
+// Добавляем Rate Limiting для защиты от DoS/DDoS атак
+builder.Services.AddAuthRateLimiting();
 
 var app = builder.Build();
 
-// Настройка Swagger
+// ---------- Middleware ----------
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();   // отдаёт swagger.json (документ API)
-    app.UseSwaggerUI(); // отображает UI по адресу /swagger
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
+
+// Глобальный обработчик ошибок — ставим в начале конвейера (после Swagger)
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseHttpsRedirection();
 
-// Middleware для аутентификации и авторизации
-app.UseAuthentication();
+app.UseRateLimiter();   // Включаем Rate Limiting, для защиты от DoS/DDoS атак
+
+app.UseAuthentication();   // JWT
 app.UseAuthorization();
 
 app.MapControllers();

@@ -1,30 +1,21 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
-using OnlineStore.Application.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using OnlineStore.Domain.Entities;
+using OnlineStore.Application.Interfaces.Repositories;
+using OnlineStore.Application.Interfaces.Services;
 using OnlineStore.Infrastructure.Repositories;
 using OnlineStore.Infrastructure.Services;
 
 namespace OnlineStore.Infrastructure.Extensions;
 
-/// <summary>
-/// Расширения для регистрации сервисов и репозиториев в DI.
-/// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Регистрация всех инфраструктурных зависимостей.
-    /// </summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        // Регистрация репозитория продуктов
-        // Используется для внедрения зависимостей в контроллеры и сервисы
-        services.AddScoped<IProductRepository, ProductRepository>();
+        // Репозитории, которые УЖЕ существуют
         services.AddScoped<IUserRepository, UserRepository>();
 
-        // Регистрация сервиса продуктов
-        // Используется для бизнес-логики и обработки DTO
-        services.AddScoped<IProductService, ProductService>();
+        // Инфраструктурные сервисы (если AuthService перенесён в Infrastructure/Services)
         services.AddScoped<IAuthService, AuthService>();
 
         // Вспомогательные зависимости

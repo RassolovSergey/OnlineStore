@@ -14,11 +14,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Pet-Project\\OnlineStore\\OnlineStore.Domain\\OnlineStore.Domain.csproj",
+      "projectUniqueName": "c:\\Pet-Project\\OnlineStore\\OnlineStore.Domain\\OnlineStore.Domain.csproj",
       "projectName": "OnlineStore.Domain",
-      "projectPath": "C:\\Pet-Project\\OnlineStore\\OnlineStore.Domain\\OnlineStore.Domain.csproj",
+      "projectPath": "c:\\Pet-Project\\OnlineStore\\OnlineStore.Domain\\OnlineStore.Domain.csproj",
       "packagesPath": "C:\\Users\\NPC\\.nuget\\packages\\",
-      "outputPath": "C:\\Pet-Project\\OnlineStore\\OnlineStore.Domain\\obj\\",
+      "outputPath": "c:\\Pet-Project\\OnlineStore\\OnlineStore.Domain\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -73,7 +73,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.303/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
