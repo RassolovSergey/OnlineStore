@@ -2,60 +2,49 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Infrastructure.Configurations;
-
-/// <summary>
-/// Конфигурация Project:
-/// </summary>
-public class ProjectConfiguration : IEntityTypeConfiguration<Project>
+namespace OnlineStore.Infrastructure.Persistence.Configurations
 {
-    // Этот метод вызывается при создании модели базы данных
-    // Здесь мы можем настроить связи, ограничения и другие аспекты модели
-    public void Configure(EntityTypeBuilder<Project> builder)
+    public class ProjectConfiguration : IEntityTypeConfiguration<Project>
     {
-        // Таблица для сущности Project
-        builder.ToTable("Projects", tb =>
+        public void Configure(EntityTypeBuilder<Project> builder)
         {
-            // Настройка схемы и других параметров таблицы
-            tb.HasComment("Таблица проектов, содержащая информацию об актуальных проектах, их моделях и изображениях.");
-            tb.HasCheckConstraint(
-                "CK_Projects_Price_NonNegative",
-                "\"Price\" >= 0"
-            );
-        });
+            builder.ToTable("projects", tb =>
+            {
+                tb.HasCheckConstraint("CK_Projects_Price_NonNegative", "price >= 0");
+                tb.HasComment("Проекты (наборы моделей) и их метаданные.");
+            });
 
-        // Обозначаем первичный ключ
-        builder.HasKey(p => p.Id);
+            builder.HasKey(p => p.Id);
 
-        // Настраиваем свойства Name
-        builder.Property(p => p.Name)
-            .IsRequired()   // Имя проекта обязательно
-            .HasMaxLength(200); // Максимальная длина имени проекта
+            builder.Property(p => p.Name).HasMaxLength(200).IsRequired();
+            builder.Property(p => p.Description).HasMaxLength(2000);
 
-        // Настраиваем свойства Description
-        builder.Property(p => p.Description)
-            .HasMaxLength(2000); // Максимальная длина описания проекта
+            builder.Property(p => p.Price)
+                   .HasColumnName("price")
+                   .HasColumnType("numeric(18,2)")
+                   .IsRequired();
 
-        // Настраиваем свойства CompanyUrl
-        builder.Property(p => p.CompanyUrl)
-            .HasMaxLength(500); // Максимальная длина URL компании
+            builder.Property(p => p.CompanyUrl)
+                   .HasColumnName("company_url")
+                   .HasMaxLength(500);
 
-        builder.Property(p => p.Price)
-            .HasPrecision(18, 2); // Точность для цены проекта
+            builder.Property(p => p.CreatedAt)
+                   .HasColumnName("created_at")
+                   .IsRequired();
 
-        // Проект -> Модели (1:N)
-        builder.HasMany(p => p.Models)
-            .WithOne(m => m.Project)    // Указываем навигационное свойство в Model3D 1:1
-            .HasForeignKey(m => m.ProjectId)    // Указываем внешний ключ в Model3D
-            .OnDelete(DeleteBehavior.Cascade);  // При удалении проекта удаляются и все модели, связанные с ним
+            builder.HasMany(p => p.Models)
+                   .WithOne(m => m.Project)
+                   .HasForeignKey(m => m.ProjectId)
+                   .OnDelete(DeleteBehavior.Cascade);
 
-        // Проект -> Изображения проекта (1:N)
-        builder.HasMany(p => p.Images)
-            .WithOne(i => i.Project)    // Указываем навигационное свойство в ModelImage
-            .HasForeignKey(i => i.ProjectId)    // Указываем внешний ключ в ModelImage
-            .OnDelete(DeleteBehavior.Cascade);  // При удалении проекта удаляются и все изображения, связанные с ним
+            builder.HasMany(p => p.Images)
+                   .WithOne(i => i.Project)
+                   .HasForeignKey(i => i.ProjectId)
+                   .OnDelete(DeleteBehavior.Cascade);
 
-        // Индекс для быстрого поиска проектов по дате создания
-        builder.HasIndex(p => p.CreatedAt);
+            // Навигации-коллекции в Project: OrderItems, CartItems — добавлять связи не требуется,
+            // они настроены со стороны зависимых сущностей
+            builder.HasIndex(p => p.CreatedAt);
+        }
     }
 }

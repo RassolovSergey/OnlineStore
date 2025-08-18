@@ -2,38 +2,36 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Infrastructure.Configurations;
-
-/// <summary>
-/// Конфигурация заказа пользователя (Order).
-/// </summary>
-public class OrderConfiguration : IEntityTypeConfiguration<Order>
+namespace OnlineStore.Infrastructure.Persistence.Configurations
 {
-       public void Configure(EntityTypeBuilder<Order> builder)
+       public class OrderConfiguration : IEntityTypeConfiguration<Order>
        {
-              // Настройка таблицы для заказов
-              builder.ToTable("Orders");
-              // Уникальный идентификатор заказа
-              builder.HasKey(o => o.Id);
+              public void Configure(EntityTypeBuilder<Order> builder)
+              {
+                     builder.ToTable("orders", tb =>
+                     {
+                            tb.HasComment("Заказы пользователей.");
+                     });
 
-              // Связь: User 1 -> N Orders (без каскада — сохраняем историю)
-              builder.HasOne(o => o.User)
-                     .WithMany(u => u.Orders!)    // Один пользователь может иметь много заказов
-                     .HasForeignKey(o => o.UserId)    // Внешний ключ к пользователю
-                     .OnDelete(DeleteBehavior.Restrict); // Удаление заказов не приводит к удалению пользователя
+                     builder.HasKey(o => o.Id);
 
-              // Время создания — дефолт на стороне БД
-              builder.Property(o => o.CreatedAt)
-                     .HasDefaultValueSql("CURRENT_TIMESTAMP");    // Устанавливаем текущее время при создании заказа
+                     builder.Property(o => o.CreatedAt)
+                            .HasColumnName("created_at")
+                            .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-              // Сумма заказа (опционально). Точность 18,2 также задана глобально в DbContext.
-              builder.Property(o => o.TotalAmount)
-                     .HasPrecision(18, 2);    // Точность для суммы заказа
+                     builder.Property(o => o.TotalAmount)
+                            .HasColumnName("total_amount")
+                            .HasPrecision(18, 2);
 
-              // Индексы для быстрого поиска заказов
-              builder.HasIndex(o => o.UserId);
-              builder.HasIndex(o => o.CreatedAt);
-              // Индекс для выборок истории: сначала по пользователю, затем по дате
-              builder.HasIndex(o => new { o.UserId, o.CreatedAt });
+                     builder.HasOne(o => o.User)
+                            .WithMany(u => u.Orders)
+                            .HasForeignKey(o => o.UserId)
+                            .OnDelete(DeleteBehavior.Restrict);
+
+                     // Коллекция OrderItems уже объявлена в Order — связи зададим в конфиге OrderItem
+                     builder.HasIndex(o => o.UserId);
+                     builder.HasIndex(o => o.CreatedAt);
+                     builder.HasIndex(o => new { o.UserId, o.CreatedAt });
+              }
        }
 }

@@ -1,22 +1,23 @@
-namespace OnlineStore.Domain.Entities;
-
-/// <summary>
-/// Корзина пользователя
-/// </summary>
-public class Cart
+namespace OnlineStore.Domain.Entities
 {
-    // Уникальный идентификатор корзины
-    public Guid Id { get; set; }
-    
-    // Ccвязь с пользователем
-    // 1:1 связь с сущностью User
-    public Guid UserId { get; set; }
+    /// <summary>
+    /// Корзина пользователя
+    /// </summary>
+    public class Cart
+    {
+        // Уникальный идентификатор корзины
+        public Guid Id { get; set; }
 
-    // Навигационное свойство к пользователю
-    public User User { get; set; } = null!;
+        // Ccвязь с пользователем
+        // 1:1 связь с сущностью User
+        public Guid UserId { get; set; }
 
-    // Коллекция элементов корзины
-    // 1:N связь с сущностью CartItem
+        // Навигационное свойство к пользователю
+        public User User { get; set; } = null!;
 
-    public ICollection<CartItem> CartItems { get; set; } = new List<CartItem>();
+        // Коллекция элементов корзины
+        // 1:N связь с сущностью CartItem
+
+        public ICollection<CartItem> CartItems { get; set; } = new List<CartItem>();
+    }
 }

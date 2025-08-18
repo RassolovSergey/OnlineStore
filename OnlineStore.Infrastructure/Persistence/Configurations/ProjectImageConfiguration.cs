@@ -2,54 +2,45 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Infrastructure.Configurations;
-
-/// <summary>
-/// Конфигурация изображений проекта.
-/// </summary>
-public class ProjectImageConfiguration : IEntityTypeConfiguration<ProjectImage>
+namespace OnlineStore.Infrastructure.Persistence.Configurations
 {
-    // Этот метод вызывается при создании модели базы данных
-    // Здесь мы можем настроить связи, ограничения и другие аспекты модели
-    public void Configure(EntityTypeBuilder<ProjectImage> builder)
-    {
-        // Таблица для сущности ProjectImage
-        builder.ToTable("ProjectImages");
+       public class ProjectImageConfiguration : IEntityTypeConfiguration<ProjectImage>
+       {
+              public void Configure(EntityTypeBuilder<ProjectImage> builder)
+              {
+                     builder.ToTable("project_images", tb =>
+                     {
+                            tb.HasCheckConstraint("CK_ProjectImages_Order_NonNegative", "\"order\" >= 0");
+                            tb.HasComment("Изображения, привязанные к проектам.");
+                     });
 
-        // Обозначаем первичный ключ
-        builder.HasKey(pi => pi.Id);
+                     builder.HasKey(pi => pi.Id);
 
-        // Настраиваем свойства ImageUrl
-        builder.Property(pi => pi.ImageUrl)
-               .IsRequired()    // URL изображения обязателен
-               .HasMaxLength(500);  // Максимальная длина URL изображения
+                     builder.Property(pi => pi.ImageUrl)
+                            .HasColumnName("image_url")
+                            .HasMaxLength(500)
+                            .IsRequired();
 
-        // Настраиваем свойства Description
-        builder.Property(pi => pi.Description)
-               .HasMaxLength(1000); // Максимальная длина описания изображения
+                     builder.Property(pi => pi.Description)
+                            .HasMaxLength(1000);
 
-        // Настраиваем свойства IsPreview
-        builder.Property(pi => pi.IsPreview)    
-               .IsRequired();   // Флаг превью обязателен
+                     builder.Property(pi => pi.IsPreview)
+                            .HasColumnName("is_preview")
+                            .IsRequired();
 
-        // Настраиваем свойства Order
-        builder.Property(pi => pi.Order)
-               .IsRequired();   // Порядок отображения изображения обязателен
+                     builder.Property(pi => pi.Order)
+                            .HasColumnName("order")
+                            .IsRequired();
 
-        // Связь: проект 1 -> N изображения
-        builder.HasOne(pi => pi.Project)
-               .WithMany(p => p.Images)   // Указываем навигационное свойство в Project
-               .HasForeignKey(pi => pi.ProjectId)   // Указываем внешний ключ в ProjectImage
-               .OnDelete(DeleteBehavior.Cascade);   // При удалении проекта удаляются и все изображения, связанные с ним
+                     builder.HasOne(pi => pi.Project)
+                            .WithMany(p => p.Images)
+                            .HasForeignKey(pi => pi.ProjectId)
+                            .OnDelete(DeleteBehavior.Cascade);
 
-        // Быстрая сортировка галереи внутри проекта
-        // Индекс для ускорения выборки изображений по ProjectId и Order
-        // Это поможет при отображении изображений в порядке, заданном пользователем
-        builder.HasIndex(pi => new { pi.ProjectId, pi.Order });
-
-        // Настраиваем свойство ProjectId
-        builder.HasIndex(pi => pi.ProjectId)
-               .IsUnique()  // Уникальный индекс для ProjectId, если нужно
-               .HasFilter("\"IsPreview\" = TRUE");  // Фильтр для IsPreview, чтобы не мешать с другими изображениями
-    }
+                     builder.HasIndex(pi => new { pi.ProjectId, pi.Order });
+                     builder.HasIndex(pi => pi.ProjectId)
+                            .IsUnique()
+                            .HasFilter("is_preview = TRUE");
+              }
+       }
 }

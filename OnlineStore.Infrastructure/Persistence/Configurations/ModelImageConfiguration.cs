@@ -2,55 +2,45 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Infrastructure.Configurations;
-
-/// <summary>
-/// Конфигурация изображений модели.
-/// </summary>
-public class ModelImageConfiguration : IEntityTypeConfiguration<ModelImage>
+namespace OnlineStore.Infrastructure.Configurations
 {
-    public void Configure(EntityTypeBuilder<ModelImage> builder)
-    {
-       // Настройка таблицы для изображений модели
-       builder.ToTable("ModelImages", tb =>
+       public class ModelImageConfiguration : IEntityTypeConfiguration<ModelImage>
        {
-              tb.HasCheckConstraint("CK_ModelImages_Order_NonNegative",
-                                   "\"Order\" >= 0"); 
-       });
+              public void Configure(EntityTypeBuilder<ModelImage> builder)
+              {
+                     builder.ToTable("model_images", tb =>
+                     {
+                            tb.HasCheckConstraint("CK_ModelImages_Order_NonNegative", "\"order\" >= 0");
+                            tb.HasComment("Изображения, привязанные к 3D-моделям.");
+                     });
 
+                     builder.HasKey(mi => mi.Id);
 
-       // Уникальный идентификатор изображения
-       builder.HasKey(mi => mi.Id);
+                     builder.Property(mi => mi.ImageUrl)
+                            .HasColumnName("image_url")
+                            .HasMaxLength(500)
+                            .IsRequired();
 
-       // Настройка свойств изображения
-       builder.Property(mi => mi.ImageUrl)
-              .IsRequired() // Обязательное поле
-              .HasMaxLength(500);  // Максимальная длина URL
+                     builder.Property(mi => mi.Description)
+                            .HasMaxLength(1000);
 
-       // Настройка свойств Description
-       builder.Property(mi => mi.Description)
-              .HasMaxLength(1000); // Максимальная длина описания
+                     builder.Property(mi => mi.IsPreview)
+                            .HasColumnName("is_preview")
+                            .IsRequired();
 
-       // Настройка свойств поля IsPreview
-       builder.Property(mi => mi.IsPreview)
-              .IsRequired(); // Обязательное поле
+                     builder.Property(mi => mi.Order)
+                            .HasColumnName("order")
+                            .IsRequired();
 
-       // Настройка свойств поля Order
-       builder.Property(mi => mi.Order)
-               .IsRequired();      // Обязательное поле
+                     builder.HasOne(mi => mi.Model3D)
+                            .WithMany(m => m.Images)
+                            .HasForeignKey(mi => mi.Model3DId)
+                            .OnDelete(DeleteBehavior.Cascade);
 
-        // Связь: модель 1 -> N изображения
-        builder.HasOne(mi => mi.Model3D)
-               .WithMany(m => m.Images)   // Один проект может иметь много изображений
-               .HasForeignKey(mi => mi.Model3DId)       // Внешний ключ к модели
-               .OnDelete(DeleteBehavior.Cascade);       // Удаление изображений при удалении модели
-
-        // Быстрая сортировка галереи внутри модели
-        builder.HasIndex(mi => new { mi.Model3DId, mi.Order });
-
-        // Гарантируем ОДНО превью на модель (partial unique index, PostgreSQL)
-        builder.HasIndex(mi => mi.Model3DId)
-               .IsUnique()  // Уникальный индекс по Model3DId
-               .HasFilter("\"IsPreview\" = TRUE");      // Условие для уникальности только для превью
-    }
+                     builder.HasIndex(mi => new { mi.Model3DId, mi.Order });
+                     builder.HasIndex(mi => mi.Model3DId)
+                            .IsUnique()
+                            .HasFilter("is_preview = TRUE");
+              }
+       }
 }

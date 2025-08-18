@@ -1,4 +1,5 @@
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\bin\Debug\net9.0\OnlineStore.Infrastructure.deps.json
+C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\bin\Debug\net9.0\OnlineStore.Infrastructure.runtimeconfig.json
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\bin\Debug\net9.0\OnlineStore.Infrastructure.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\bin\Debug\net9.0\OnlineStore.Infrastructure.pdb
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\bin\Debug\net9.0\OnlineStore.Application.dll
@@ -15,4 +16,5 @@ C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\obj\Debug\net9.0\OnlineSt.
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\obj\Debug\net9.0\OnlineStore.Infrastructure.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\obj\Debug\net9.0\refint\OnlineStore.Infrastructure.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\obj\Debug\net9.0\OnlineStore.Infrastructure.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\obj\Debug\net9.0\OnlineStore.Infrastructure.genruntimeconfig.cache
 C:\Pet-Project\OnlineStore\OnlineStore.Infrastructure\obj\Debug\net9.0\ref\OnlineStore.Infrastructure.dll

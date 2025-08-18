@@ -8,6 +8,7 @@ C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.pdb
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\AutoMapper.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\AutoMapper.Extensions.Microsoft.DependencyInjection.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\EFCore.NamingConventions.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\FluentValidation.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\FluentValidation.AspNetCore.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\FluentValidation.DependencyInjectionExtensions.dll

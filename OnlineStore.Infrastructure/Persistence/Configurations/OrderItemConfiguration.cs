@@ -2,71 +2,59 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Infrastructure.Configurations;
-
-/// <summary>
-/// Конфигурация элемента заказа (OrderItem).
-/// </summary>
-public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
+namespace OnlineStore.Infrastructure.Persistence.Configurations
 {
-       public void Configure(EntityTypeBuilder<OrderItem> builder)
+       public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
        {
-              builder.ToTable("OrderItems", tb =>
+              public void Configure(EntityTypeBuilder<OrderItem> builder)
               {
-                     tb.HasCheckConstraint(
-                            "CK_OrderItem_ExactlyOneRef",
-                            "(CASE WHEN \"Model3DId\" IS NOT NULL THEN 1 ELSE 0 END) + " +
-                            "(CASE WHEN \"ProjectId\" IS NOT NULL THEN 1 ELSE 0 END) = 1"
-                     );
+                     builder.ToTable("order_items", tb =>
+                     {
+                            tb.HasCheckConstraint(
+                       "CK_OrderItem_ExactlyOneRef",
+                       "(CASE " +
+                       "WHEN model3d_id IS NOT NULL THEN project_id IS NULL " +
+                       "WHEN project_id IS NOT NULL THEN model3d_id IS NULL " +
+                       "ELSE FALSE END)"
+                   );
 
-                     tb.HasCheckConstraint(
-                            "CK_OrderItems_PriceAtPurchase_NonNegative",
-                            "\"PriceAtPurchase\" >= 0"
-                     );
-              });
+                            tb.HasCheckConstraint("CK_OrderItem_PriceAtPurchase_NonNegative", "price_at_purchase >= 0");
+                            tb.HasComment("Позиции заказа: либо модель, либо проект.");
+                     });
 
+                     builder.HasKey(oi => oi.Id);
 
-              // Уникальный идентификатор элемента заказа
-              builder.HasKey(oi => oi.Id);
+                     builder.Property(oi => oi.PriceAtPurchase)
+                            .HasColumnName("price_at_purchase")
+                            .HasPrecision(18, 2)
+                            .IsRequired();
 
-              // Связь: Order 1 -> N OrderItems (каскад при удалении заказа)
-              builder.HasOne(oi => oi.Order)
-                     .WithMany(o => o.OrderItems) // Один заказ может иметь много элементов
-                     .HasForeignKey(oi => oi.OrderId) // Внешний ключ к заказу
-                     .OnDelete(DeleteBehavior.Cascade);   // Удаление элементов при удалении заказа
+                     builder.HasOne(oi => oi.Order)
+                            .WithMany(o => o.OrderItems) // ⚠️ корректное имя коллекции
+                            .HasForeignKey(oi => oi.OrderId)
+                            .OnDelete(DeleteBehavior.Cascade);
 
-              // Опциональная связь с Model3D (без каскада — сохраняем историю)
-              builder.HasOne(oi => oi.Model3D)
-                     .WithMany(m => m.OrderItems!)    // Один 3D-модель может иметь много элементов заказа
-                     .HasForeignKey(oi => oi.Model3DId)   // Внешний ключ к модели
-                     .OnDelete(DeleteBehavior.Restrict);  // Удаление элементов не приводит к удалению модели
+                     builder.HasOne(oi => oi.Model3D)
+                            .WithMany(m => m.OrderItems)  // коллекция есть в Model3D
+                            .HasForeignKey(oi => oi.Model3DId)
+                            .OnDelete(DeleteBehavior.Restrict);
 
-              // Опциональная связь с Project (без каскада — сохраняем историю)
-              builder.HasOne(oi => oi.Project)
-                     .WithMany(p => p.OrderItems!)    // Один проект может иметь много элементов заказа
-                     .HasForeignKey(oi => oi.ProjectId)   // Внешний ключ к проекту
-                     .OnDelete(DeleteBehavior.Restrict);  // Удаление элементов не приводит к удалению проекта
+                     builder.HasOne(oi => oi.Project)
+                            .WithMany(p => p.OrderItems)  // коллекция есть в Project
+                            .HasForeignKey(oi => oi.ProjectId)
+                            .OnDelete(DeleteBehavior.Restrict);
 
-              // Цена позиции на момент покупки
-              builder.Property(oi => oi.PriceAtPurchase)
-                     .HasPrecision(18, 2);    // Точность для цены
+                     builder.HasIndex(oi => new { oi.OrderId, oi.Model3DId })
+                            .IsUnique()
+                            .HasFilter("model3d_id IS NOT NULL");
 
-              // Уникальность внутри одного заказа (частично-уникальные индексы)
-              builder.HasIndex(oi => new { oi.OrderId, oi.Model3DId })
-                     .IsUnique()  // Уникальный индекс по OrderId и Model3DId
-                     .HasFilter("\"Model3DId\" IS NOT NULL"); // Условие для уникальности только для Model3DId
+                     builder.HasIndex(oi => new { oi.OrderId, oi.ProjectId })
+                            .IsUnique()
+                            .HasFilter("project_id IS NOT NULL");
 
-              builder.HasIndex(oi => new { oi.OrderId, oi.ProjectId })
-                     .IsUnique()  // Уникальный индекс по OrderId и ProjectId
-                     .HasFilter("\"ProjectId\" IS NOT NULL"); // Условие для уникальности только для ProjectId
-
-              // Быстрый доступ к позициям конкретного заказа
-              builder.HasIndex(oi => oi.OrderId);
-
-              // История покупок по модели (чтение аналитики)
-              builder.HasIndex(oi => oi.Model3DId).HasFilter("\"Model3DId\" IS NOT NULL");
-
-              // История покупок по проекту (чтение аналитики)
-              builder.HasIndex(oi => oi.ProjectId).HasFilter("\"ProjectId\" IS NOT NULL");
+                     builder.HasIndex(oi => oi.OrderId);
+                     builder.HasIndex(oi => oi.Model3DId).HasFilter("model3d_id IS NOT NULL");
+                     builder.HasIndex(oi => oi.ProjectId).HasFilter("project_id IS NOT NULL");
+              }
        }
 }

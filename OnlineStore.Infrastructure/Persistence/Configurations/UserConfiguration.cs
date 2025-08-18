@@ -2,52 +2,45 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Infrastructure.Configurations;
-
-/// <summary>
-/// Конфигурация сущности User:
-/// - уникальность Email
-/// - длины строк
-/// - дефолт для CreatedAt
-/// - связь 1:1 с Cart (часть 1: указываем навигацию со стороны User)
-/// </summary>
-public class UserConfiguration : IEntityTypeConfiguration<User>
+namespace OnlineStore.Infrastructure.Persistence.Configurations
 {
-    public void Configure(EntityTypeBuilder<User> builder)
+    public class UserConfiguration : IEntityTypeConfiguration<User>
     {
-        // Таблица для сущности User
-        // Используем явное указание имени таблицы, если нужно
-        builder.ToTable("Users");
+        public void Configure(EntityTypeBuilder<User> builder)
+        {
+            builder.ToTable("users", tb =>
+            {
+                tb.HasComment("Пользователи интернет-магазина.");
+            });
 
-        // Обозначаем первичный ключ
-        builder.HasKey(u => u.Id);
+            builder.HasKey(u => u.Id);
 
-        // Настраиваем свойства
-        builder.Property(u => u.Email)
-            .IsRequired()       // Email обязателен
-            .HasMaxLength(255); // Максимальная длина Email
+            builder.Property(u => u.Email)
+                .HasColumnName("email")
+                .HasMaxLength(255).
+                IsRequired();
+            builder.Property(u => u.NormalizedEmail)
+                .HasColumnName("normalized_email")
+                .HasMaxLength(255)
+                .IsRequired();
+            builder.Property(u => u.PasswordHash)
+                .HasColumnName("password_hash")
+                .HasMaxLength(500)
+                .IsRequired();
+            builder.Property(u => u.CreatedAt)
+                .HasColumnName("created_at")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-        builder.Property(u => u.NormalizedEmail)
-            .IsRequired()       // Нормализованный email обязателен
-            .HasMaxLength(255); // Максимальная длина нормализованного email
+            // 1:1 с Cart (FK в Cart.UserId)
+            builder.HasOne(u => u.Cart)
+                .WithOne(c => c.User)
+                .HasForeignKey<Cart>(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        // Настраиваем уникальность Email
-        builder.HasIndex(u => u.Email)
-            .IsUnique(); // уникальный Email
-
-        // Настраиваем свойства для пароля
-        builder.Property(u => u.PasswordHash)
-            .IsRequired()       // Пароль обязателен
-            .HasMaxLength(500); // Максимальная длина хеша пароля
-
-        // Дата регистрации по умолчанию — на стороне БД
-        builder.Property(u => u.CreatedAt)
-            .HasDefaultValueSql("CURRENT_TIMESTAMP"); // Используем SQL для установки текущей даты
-
-        // Связь 1:1 с корзиной (часть 1): у пользователя может быть одна корзина
-        builder.HasOne(u => u.Cart)
-            .WithOne(c => c.User) // У корзины есть один пользователь
-            .HasForeignKey<Cart>(c => c.UserId) // Указываем внешний ключ в корзине
-            .OnDelete(DeleteBehavior.Cascade);  // При удалении пользователя удаляется и корзина
+            // 1:N с Order (коллекция Orders есть)
+            // Доп. конфигурация FK задана в OrderConfiguration
+            builder.HasIndex(u => u.NormalizedEmail)
+                .IsUnique();
+        }
     }
 }

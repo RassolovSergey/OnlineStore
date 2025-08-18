@@ -1,11 +1,12 @@
 using System.Net;
 
-namespace OnlineStore.Application.Exceptions;
-
-public sealed class NotFoundException : AppException
+namespace OnlineStore.Application.Exceptions
 {
-    public NotFoundException(string message) : base(message, HttpStatusCode.NotFound)
+    public sealed class NotFoundException : AppException
     {
-        // Дополнительная логика, если нужна
+        public NotFoundException(string message) : base(message, HttpStatusCode.NotFound)
+        {
+            // Дополнительная логика, если нужна
+        }
     }
 }

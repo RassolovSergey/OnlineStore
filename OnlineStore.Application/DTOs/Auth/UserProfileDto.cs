@@ -1,16 +1,17 @@
-namespace OnlineStore.Application.DTOs.Auth;
-
-/// <summary>
-/// Данные профиля текущего пользователя.
-/// </summary>
-public class UserProfileDto
+namespace OnlineStore.Application.DTOs.Auth
 {
-    // Идентификатор пользователя
-    public Guid Id { get; set; }
+    /// <summary>
+    /// Данные профиля текущего пользователя.
+    /// </summary>
+    public class UserProfileDto
+    {
+        // Идентификатор пользователя
+        public Guid Id { get; set; }
 
-    // Email пользователя
-    public string Email { get; set; } = null!;
+        // Email пользователя
+        public string Email { get; set; } = null!;
 
-    // Дата создания профиля
-    public DateTime CreatedAt { get; set; }
+        // Дата создания профиля
+        public DateTime CreatedAt { get; set; }
+    }
 }

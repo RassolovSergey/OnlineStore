@@ -1,9 +1,9 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+
 using OnlineStore.Application.DTOs.Auth;
 using OnlineStore.Domain.Entities;
 using OnlineStore.Application.Interfaces.Services;
@@ -12,199 +12,312 @@ using Microsoft.Extensions.Logging;
 using OnlineStore.Application.Exceptions;
 using Microsoft.Extensions.Options;
 using OnlineStore.Infrastructure.Options;
+using OnlineStore.Infrastructure.Persistence;
+using OnlineStore.Infrastructure.Security;
+using OnlineStore.Infrastructure.Common;
+using Microsoft.EntityFrameworkCore;
 
-namespace OnlineStore.Infrastructure.Services;
-
-public class AuthService : IAuthService
+namespace OnlineStore.Infrastructure.Services
 {
-    // Репозиторий для работы с пользователями
-    private readonly IUserRepository _users;
-    private readonly IPasswordHasher<User> _passwordHasher;
-    private readonly JwtOptions _jwt;
-    private readonly ILogger<AuthService> _logger;
-
-    // Получение профиля пользователя по его идентификатору
-    public async Task<UserProfileDto> GetProfileAsync(Guid userId)
+    /// <summary>
+    /// Сервис аутентификации: регистрация/логин/JWT/refresh-поток/смена пароля.
+    /// </summary>
+    public class AuthService : IAuthService
     {
-        // Ищем в репозитории
-        var user = await _users.GetByIdAsync(userId);
-        if (user is null)
-            throw new NotFoundException("Пользователь не найден.");
+        private readonly IUserRepository _users;                     // Репозиторий пользователей
+        private readonly IPasswordHasher<User> _passwordHasher;      // Хешер паролей (Identity)
+        private readonly JwtOptions _jwt;                            // Опции JWT
+        private readonly ILogger<AuthService> _logger;               // Логер
+        private readonly IRefreshTokenFactory _rtFactory;            // Фабрика refresh-токенов
+        private readonly IRefreshTokenRepository _rtRepo;            // Репозиторий refresh-токенов
+        private readonly AppDbContext _db;                           // EF Core DbContext для транзакций/коммитов
 
-        // Маппим руками (можно через AutoMapper при желании)
-        return new UserProfileDto
+        public AuthService(
+            IUserRepository users,
+            IPasswordHasher<User> passwordHasher,
+            IOptions<JwtOptions> jwtOptions,
+            ILogger<AuthService> logger,
+            IRefreshTokenFactory rtFactory,
+            IRefreshTokenRepository rtRepo,
+            AppDbContext db)
         {
-            Id = user.Id,
-            Email = user.Email,
-            CreatedAt = user.CreatedAt
-        };
-    }
-
-    // Конструктор для внедрения зависимостей
-    public AuthService(IUserRepository users, IPasswordHasher<User> passwordHasher, IOptions<JwtOptions> jwtOptions, ILogger<AuthService> logger)
-    {
-        _users = users;
-        _passwordHasher = passwordHasher;
-        _jwt = jwtOptions.Value;
-        _logger = logger;
-    }
-
-    // Утилита нормализации email
-    private static string NormalizeEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-            throw new ArgumentException("Email не может быть пустой строкой", nameof(email));
-
-        return email.Trim().ToUpperInvariant();
-    }
-
-    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
-    {
-        // Проверяем, что email не пустой
-        if (string.IsNullOrWhiteSpace(request.Email))
-            throw new ArgumentException("Email не может быть пустой строкой", nameof(request.Email));
-
-        // Удаляем пробелы и нормализуем email
-        var email = request.Email.Trim();
-        var normalized = NormalizeEmail(email);
-
-        // Проверяем уникальность именно по нормализованному email
-        var existing = await _users.GetByNormalizedEmailAsync(normalized);
-        if (existing != null)
-            throw new Exception("Пользователь с таким email уже зарегистрирован");
-
-        // Создаем нового пользователя
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = email,
-            NormalizedEmail = normalized,
-            CreatedAt = DateTime.UtcNow,
-            PasswordHash = _passwordHasher.HashPassword(new User { Id = Guid.Empty, Email = email, NormalizedEmail = normalized }, request.Password)
-        };
-
-        // Добавляем пользователя в репозиторий и сохраняем изменения
-        await _users.AddAsync(user);
-        await _users.SaveChangesAsync();
-
-        // Генерируем токен для нового пользователя
-        return GenerateAuthResponse(user);
-    }
-
-    public async Task<AuthResponse> LoginAsync(LoginRequest request)
-    {
-        // Проверяем, что email не пустой
-        if (string.IsNullOrWhiteSpace(request.Email))
-            throw new ArgumentException("Email не может быть пустой строкой", nameof(request.Email));
-
-        // Нормализуем email
-        var normalized = NormalizeEmail(request.Email);
-
-        // Ищем пользователя по нормализованному email
-        var user = await _users.GetByNormalizedEmailAsync(normalized);
-
-        // Единое сообщение для безопасности (не раскрываем, чего нет — пользователя или пароля)
-        const string invalid = "Неверные учётные данные.";
-
-        if (user == null)
-        {
-            _logger.LogWarning("Auth: login failed (user not found) for {Email}", normalized);
-            throw new UnauthorizedAppException(invalid);
+            _users = users;
+            _passwordHasher = passwordHasher;
+            _jwt = jwtOptions.Value;
+            _logger = logger;
+            _rtFactory = rtFactory;
+            _rtRepo = rtRepo;
+            _db = db;
         }
 
-        // Проверяем пароль
-        var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
-
-        // Если пароль неверный, возвращаем единое сообщение
-        if (result == PasswordVerificationResult.Failed)
+        // Единая нормализация email для поиска/уникальности
+        private static string NormalizeEmail(string email)
         {
-            // Логируем неудачную попытку входа
-            _logger.LogWarning("Auth: login failed (bad password) for {Email}", normalized);
-            // Бросаем исключение с единым сообщением
-            throw new UnauthorizedAppException(invalid);
+            if (string.IsNullOrWhiteSpace(email))
+                throw new ArgumentException("Email не может быть пустой строкой", nameof(email));
+
+            return email.Trim().ToUpperInvariant();
         }
 
-        // Если алгоритм/параметры хеша устарели — пересчитаем и сохраним новый хеш
-        if (result == PasswordVerificationResult.SuccessRehashNeeded)
+        /// <summary>
+        /// Регистрация нового пользователя + выпуск пары токенов (access + refresh) атомарно.
+        /// </summary>
+        public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
         {
-            // Обновляем хеш пароля пользователя
+            if (string.IsNullOrWhiteSpace(request.Email))
+                throw new ArgumentException("Email не может быть пустой строкой", nameof(request.Email));
+
+            var email = request.Email.Trim();
+            var normalized = NormalizeEmail(email);
+
+            // Проверяем уникальность
+            var existing = await _users.GetByNormalizedEmailAsync(normalized);
+            if (existing is not null)
+                throw new ConflictAppException("Пользователь с таким email уже зарегистрирован.");
+
+            // Готовим сущность пользователя
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                NormalizedEmail = normalized,
+                CreatedAt = DateTime.UtcNow
+            };
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
-            // Сохраняем изменения в репозитории
-            await _users.SaveChangesAsync();
-            // Логируем пересчет хеша пароля
-            _logger.LogInformation("Auth: password rehashed for {UserId}", user.Id);
+
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                // Добавляем пользователя (без SaveChanges — коммитим в конце)
+                await _users.AddAsync(user);
+
+                // Генерируем access JWT
+                var access = GenerateJwt(user);
+
+                // Создаём refresh-токен (ВАЖНО: позиционные аргументы, без имён)
+                // Сигнатура фабрики: скорее всего (Guid userId, string? ip, string? ua)
+                var (rawRefresh, refreshEntity) = _rtFactory.Create(user.Id, null, null);
+
+                // Сохраняем refresh-токен (без SaveChanges здесь)
+                await _rtRepo.AddAsync(refreshEntity);
+
+                // ЕДИНЫЙ коммит и завершение транзакции
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                _logger.LogInformation("Auth: user registered {UserId}", user.Id);
+
+                return new AuthResponse
+                {
+                    Email = user.Email,
+                    Token = access,
+                    RefreshToken = rawRefresh
+                };
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                _logger.LogError(ex, "Auth: registration failed for {Email}", SafeLog.MaskEmail(email));
+                throw;
+            }
         }
 
-        // Логируем успешный вход
-        _logger.LogInformation("Auth: login success for {UserId}", user.Id);
-        // Возвращаем ответ с токеном и email пользователя
-        return GenerateAuthResponse(user);
-    }
-
-    // Метод для генерации JWT токена
-    private AuthResponse GenerateAuthResponse(User user)
-    {
-        // Создаем список клаймов (claims) для токена
-        // Используем стандартные клаймы JWT для идентификации пользователя
-        var claims = new[]
+        /// <summary>
+        /// Авторизация по email/паролю. При устаревшем хеше — перехэш пароля. Возвращает пару токенов.
+        /// </summary>
+        public async Task<AuthResponse> LoginAsync(LoginRequest request)
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
-        };
+            if (string.IsNullOrWhiteSpace(request.Email))
+                throw new ArgumentException("Email не может быть пустой строкой", nameof(request.Email));
 
-        // Создаем ключ безопасности и подпись для токена
-        // Используем секретный ключ из настроек JWT и алгоритм HMAC SHA256 для
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.Key));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var normalized = NormalizeEmail(request.Email);
+            var user = await _users.GetByNormalizedEmailAsync(normalized);
 
-        // Устанавливаем время жизни токена
-        // Используем значение из настроек JWT для установки времени жизни токена
-        var expires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenLifetimeMinutes);
+            const string invalid = "Неверные учётные данные.";
+            if (user is null)
+            {
+                _logger.LogWarning("Auth: login failed (user not found) for {Email}", SafeLog.MaskEmail(request.Email));
+                throw new UnauthorizedAppException(invalid);
+            }
 
-        // Создаем JWT токен с указанными клаймами, временем жизни и подписью
-        // Используем конструктор JwtSecurityToken для создания токена
-        var token = new JwtSecurityToken(
-            issuer: _jwt.Issuer,
-            audience: _jwt.Audience,
-            claims: claims,
-            expires: expires,
-            signingCredentials: creds
-        );
+            var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
+            if (result == PasswordVerificationResult.Failed)
+            {
+                _logger.LogWarning("Auth: login failed (bad password) for {Email}", SafeLog.MaskEmail(request.Email));
+                throw new UnauthorizedAppException(invalid);
+            }
 
-        // Возвращаем объект AuthResponse с email пользователя и сериализованным токеном
-        // Используем JwtSecurityTokenHandler для сериализации токена в строку
-        return new AuthResponse
-        {
-            Email = user.Email,
-            Token = new JwtSecurityTokenHandler().WriteToken(token)
-        };
-    }
+            // Если хеш устарел — обновляем его и сохраняем
+            if (result == PasswordVerificationResult.SuccessRehashNeeded)
+            {
+                user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
+                await _db.SaveChangesAsync();
+            }
 
-    // Метод для смены пароля пользователя
-    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
-    {
-        // 1) Находим пользователя
-        var user = await _users.GetByIdAsync(userId);
-        if (user is null)
-            throw new NotFoundException("Пользователь не найден.");
+            // Выпускаем access
+            var access = GenerateJwt(user);
 
-        // 2) Проверяем текущий пароль
-        var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword);
-        if (verify == PasswordVerificationResult.Failed)
-        {
-            _logger.LogWarning("Auth: change password failed (bad current) for {UserId}", userId);
-            throw new UnauthorizedAppException("Неверные учётные данные."); // единое сообщение
+            // И создаём refresh (позиционно)
+            var (rawRefresh, refreshEntity) = _rtFactory.Create(user.Id, null, null);
+            await _rtRepo.AddAsync(refreshEntity);
+
+            // Коммитим один раз
+            await _db.SaveChangesAsync();
+
+            return new AuthResponse
+            {
+                Email = user.Email,
+                Token = access,
+                RefreshToken = rawRefresh
+            };
         }
 
-        // 3) Если алгоритм устарел — можно проигнорить тут; важнее — установить НОВЫЙ хеш
-        user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+        /// <summary>
+        /// Профиль текущего пользователя.
+        /// </summary>
+        public async Task<UserProfileDto> GetProfileAsync(Guid userId)
+        {
+            var user = await _users.GetByIdAsync(userId)
+                       ?? throw new NotFoundException("Пользователь не найден.");
 
-        // (опционально) user.LastPasswordChangedAt = DateTime.UtcNow;
+            return new UserProfileDto
+            {
+                Id = user.Id,
+                Email = user.Email,
+                CreatedAt = user.CreatedAt
+            };
+        }
 
-        await _users.SaveChangesAsync();
-        _logger.LogInformation("Auth: password changed for {UserId}", userId);
+        /// <summary>
+        /// Смена пароля после проверки текущего пароля.
+        /// </summary>
+        public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct = default)
+        {
+            var user = await _users.GetByIdAsync(userId)
+                       ?? throw new NotFoundException("Пользователь не найден.");
+
+            var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.CurrentPassword);
+            if (verify == PasswordVerificationResult.Failed)
+                throw new UnauthorizedAppException("Неверные учётные данные.");
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, request.NewPassword);
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Auth: password changed for {UserId}", userId);
+        }
+
+        /// <summary>
+        /// Обновление пары токенов по действующему refresh-токену (ротация).
+        /// </summary>
+        public async Task<AuthResponse> RefreshAsync(RefreshRequest request, string? ip = null, string? ua = null)
+        {
+            if (string.IsNullOrWhiteSpace(request.RefreshToken))
+                throw new UnauthorizedAppException("Неверные учётные данные.");
+
+            // Сверяем по хешу refresh-токена
+            var hash = _rtFactory.Hash(request.RefreshToken);
+            var token = await _rtRepo.GetByHashAsync(hash)
+                ?? throw new UnauthorizedAppException("Неверные учётные данные.");
+
+            // Если уже отозван/просрочен — жёсткая защита: отзывать все активные у пользователя
+            if (!token.IsActive)
+            {
+                await _rtRepo.RevokeAllForUserAsync(token.UserId, ip);
+                throw new UnauthorizedAppException("Неверные учётные данные.");
+            }
+
+            // Ротация: текущий refresh → отозвать
+            await _rtRepo.RevokeAsync(token, ip);
+
+            // Достаём пользователя
+            var user = await _users.GetByIdAsync(token.UserId)
+                       ?? throw new NotFoundException("Пользователь не найден.");
+
+            // Новый access
+            var access = GenerateJwt(user);
+
+            // Новый refresh (позиционные аргументы ip/ua)
+            var (rawNew, newEntity) = _rtFactory.Create(user.Id, ip, ua);
+            await _rtRepo.AddAsync(newEntity);
+
+            // Связь цепочки ротации
+            token.ReplacedByTokenId = newEntity.Id;
+
+            // Коммитим изменения
+            await _db.SaveChangesAsync();
+
+            return new AuthResponse
+            {
+                Email = user.Email,
+                Token = access,
+                RefreshToken = rawNew
+            };
+        }
+
+        /// <summary>
+        /// Отзыв конкретного refresh-токена (logout). Идемпотентно.
+        /// </summary>
+        public async Task LogoutAsync(string refreshToken, string? ip = null)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken)) return;
+
+            var hash = _rtFactory.Hash(refreshToken);
+            var entity = await _rtRepo.GetByHashAsync(hash);
+            if (entity is null) return;
+
+            if (entity.RevokedAt is null)
+            {
+                await _rtRepo.RevokeAsync(entity, ip);
+                await _db.SaveChangesAsync(); // фикс: надо сохранить отзыв
+            }
+        }
+
+        /// <summary>
+        /// Вспомогательный метод: выпускает пару токенов для пользователя (access + refresh).
+        /// Не используется снаружи, но оставлен для удобства.
+        /// </summary>
+        private async Task<AuthResponse> IssueTokensAsync(User user, string? requestIp, string? requestUa)
+        {
+            // Access JWT
+            var access = GenerateJwt(user);
+
+            // Refresh (позиционно)
+            var (rawRefresh, entity) = _rtFactory.Create(user.Id, requestIp, requestUa);
+            await _rtRepo.AddAsync(entity);
+
+            return new AuthResponse
+            {
+                Email = user.Email,
+                Token = access,
+                RefreshToken = rawRefresh
+            };
+        }
+
+        /// <summary>
+        /// Генерация access-JWT для пользователя.
+        /// </summary>
+        private string GenerateJwt(User user)
+        {
+            var claims = new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.Key));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenLifetimeMinutes);
+
+            var token = new JwtSecurityToken(
+                issuer: _jwt.Issuer,
+                audience: _jwt.Audience,
+                claims: claims,
+                expires: expires,
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
     }
-
-
 }

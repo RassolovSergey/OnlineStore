@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-
+using OnlineStore.Application.Interfaces.Repositories;
 using OnlineStore.Domain.Entities;
 using OnlineStore.Infrastructure.Persistence;
 
@@ -20,22 +20,12 @@ public class UserRepository : IUserRepository
         _context = context;
     }
 
-    // Метод получения пользователя по его уникальному идентификатору
+    // Метод получения пользователя Id
     public async Task<User?> GetByIdAsync(Guid id)
     {
         // Поиск пользователя в базе данных по Id
         return await _context.Users
-            .AsNoTracking() // Используем AsNoTracking для повышения производительности при чтении
             .FirstOrDefaultAsync(u => u.Id == id);  // Поиск пользователя по Id
-    }
-
-    // Метод получения пользователя по email
-    public async Task<User?> GetByEmailAsync(string email)
-    {
-        // Поиск пользователя в базе данных по email
-        return await _context.Users
-            .AsNoTracking() // Используем AsNoTracking для повышения производительности при чтении
-            .FirstOrDefaultAsync(u => u.Email == email);    // Поиск пользователя по email
     }
 
     // Метод получения пользователя по нормализованному email
@@ -47,16 +37,18 @@ public class UserRepository : IUserRepository
     }
 
     // Добавление нового пользователя
-    public async Task AddAsync(User user)
+    public Task AddAsync(User user)
     {
-        _context.Users.Add(user);   // Добавляем пользователя в контекст
-        await _context.SaveChangesAsync();  // Сохраняем изменения в базе данных
+        _context.Users.Add(user);
+        return Task.CompletedTask;
     }
 
-    // Метод сохранения изменений в репозитории
-    public async Task SaveChangesAsync(CancellationToken ct = default)
+    // Обновление хеша пароля
+    public async Task UpdatePasswordHashAsync(Guid userId, string newPasswordHash)
     {
-        // Сохраняем изменения в контексте базы данных
-        await _context.SaveChangesAsync(ct);
+        var user = await _context.Set<User>().FirstOrDefaultAsync(u => u.Id == userId);
+        if (user is null) return;
+
+        user.PasswordHash = newPasswordHash;
     }
 }

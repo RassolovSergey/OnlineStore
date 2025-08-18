@@ -5,89 +5,108 @@ using OnlineStore.Api.Extensions;
 using OnlineStore.Application.DTOs.Auth;
 using OnlineStore.Application.Interfaces.Services;
 
-namespace OnlineStore.Api.Controllers;
-
-/// <summary>
-/// Контроллер для регистрации и логина пользователей.
-/// </summary>
-[ApiController]
-[Route("api/[controller]")]
-public class AuthController : ControllerBase
+namespace OnlineStore.Api.Controllers
 {
-    // Сервис аутентификации, который будет использоваться для регистрации и логина
-    private readonly IAuthService _authService;
-
-    // Конструктор для внедрения зависимости сервиса аутентификации
-    public AuthController(IAuthService authService)
-    {
-        // Инициализация сервиса аутентификации
-        _authService = authService;
-    }
-
     /// <summary>
-    /// Регистрация нового пользователя.
+    /// Аутентификация: регистрация, логин, профиль, смена пароля, refresh/logout.
     /// </summary>
-    [HttpPost("register")]
-    [EnableRateLimiting("ip-register")] // Ограничение частоты запросов для регистрации
-    [AllowAnonymous]    // Разрешаем доступ без аутентификации
-    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+    [ApiController]
+    [Route("api/[controller]")]
+    [Produces("application/json")]
+    public sealed class AuthController : ControllerBase
     {
-        // Вызов сервиса аутентификации для регистрации пользователя
-        var response = await _authService.RegisterAsync(request);
-        // Возвращаем ответ с данными пользователя и JWT-токеном
-        // Если регистрация успешна, возвращаем статус 200 OK с данными пользователя
-        return Ok(response);
-    }
+        private readonly IAuthService _authService;
 
-    /// <summary>
-    /// Вход пользователя.
-    /// </summary>
-    [HttpPost("login")]
-    [EnableRateLimiting("ip-login")]
-    [AllowAnonymous]
-    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
-    {
-        // Вызов сервиса аутентификации для входа пользователя
+        public AuthController(IAuthService authService) => _authService = authService;
 
-        var response = await _authService.LoginAsync(request);
-        // Возвращаем ответ с данными пользователя и JWT-токеном
-        // Если вход успешен, возвращаем статус 200 OK с данными пользователя
-        return Ok(response);
-    }
+        /// <summary>
+        /// Регистрация нового пользователя.
+        /// Возвращает пару токенов (access + refresh).
+        /// </summary>
+        [HttpPost("register")]
+        [AllowAnonymous]
+        [EnableRateLimiting("ip-register")]
+        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
+        public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+        {
+            // Валидацию делает FluentValidation; проверку уникальности — сервис
+            var response = await _authService.RegisterAsync(request);
+            return Ok(response); // мы сразу логиним, поэтому 200 OK (а не 201)
+        }
 
-    /// <summary>
-    /// Текущий профиль пользователя (по JWT).
-    /// </summary>
-    [HttpGet("me")]
-    [Authorize] // требуется валидный токен
-    [ProducesResponseType(typeof(OnlineStore.Application.DTOs.Auth.UserProfileDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Me()
-    {
-        // Достаём userId из клеймов
-        var userId = User.GetUserId();
+        /// <summary>
+        /// Логин по email/паролю.
+        /// Возвращает пару токенов (access + refresh).
+        /// </summary>
+        [HttpPost("login")]
+        [AllowAnonymous]
+        [EnableRateLimiting("ip-login")]
+        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
+        {
+            var response = await _authService.LoginAsync(request);
+            return Ok(response);
+        }
 
-        // Берём профиль из сервиса
-        var profile = await _authService.GetProfileAsync(userId);
+        /// <summary>
+        /// Текущий профиль пользователя (по JWT).
+        /// </summary>
+        [HttpGet("me")]
+        [Authorize] // требуется валидный access-токен
+        [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> Me()
+        {
+            var userId = User.GetUserId();                 // из клейма sub/nameidentifier
+            var profile = await _authService.GetProfileAsync(userId);
+            return Ok(profile);
+        }
 
-        return Ok(profile);
-    }
+        /// <summary>
+        /// Смена пароля текущего пользователя.
+        /// </summary>
+        [HttpPost("change-password")]
+        [Authorize]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            var userId = User.GetUserId();
+            await _authService.ChangePasswordAsync(userId, request);
+            return NoContent();                            // 204 — по REST «успех без тела»
+        }
 
-    /// <summary>Смена пароля текущего пользователя.</summary>
-    [HttpPost("change-password")]
-    [Authorize] // требуется валидный JWT
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
-    {
-        // 1) Достаём id из токена
-        var userId = User.GetUserId();
+        /// <summary>
+        /// Обновление пары токенов по действующему refresh-токену (ротация).
+        /// </summary>
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        [EnableRateLimiting("ip-login")]                   // такой же лимит, как и у логина
+        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var ua = Request.Headers.UserAgent.ToString();
+            var rsp = await _authService.RefreshAsync(request, ip, ua);
+            return Ok(rsp);
+        }
 
-        // 2) Делаем операцию в сервисе
-        await _authService.ChangePasswordAsync(userId, request);
-
-        // 3) Нечего отдавать — 204 No Content
-        return NoContent();
+        /// <summary>
+        /// Logout: отзыв конкретного refresh-токена.
+        /// </summary>
+        [HttpPost("logout")]
+        [Authorize]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> Logout([FromBody] RefreshRequest request)
+        {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            await _authService.LogoutAsync(request.RefreshToken, ip);
+            return NoContent();
+        }
     }
 }

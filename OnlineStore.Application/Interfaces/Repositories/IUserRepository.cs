@@ -1,21 +1,20 @@
 using OnlineStore.Domain.Entities;
 
-namespace OnlineStore.Application.Interfaces.Repositories;
-
-public interface IUserRepository
+namespace OnlineStore.Application.Interfaces.Repositories
 {
-    // Метод получения пользователя по его уникальному идентификатору
-    Task<User?> GetByIdAsync(Guid id);
+    public interface IUserRepository
+    {
+        // Метод получения пользователя по его уникальному идентификатору
+        Task<User?> GetByIdAsync(Guid id);
 
-    //  Метод получения пользователя по email
-    Task<User?> GetByEmailAsync(string email);
+        // Метод получения пользователя по нормализованному email
+        Task<User?> GetByNormalizedEmailAsync(string normalized);
 
-    // Метод получения пользователя по нормализованному email
-    Task<User?> GetByNormalizedEmailAsync(string normalized);
+        // Метод добавления нового пользователя
+        Task AddAsync(User user);
 
-    // Метод добавления нового пользователя
-    Task AddAsync(User user);
-
-    // Метод сохранения изменений в репозитории
-    Task SaveChangesAsync(CancellationToken ct = default);
+        // Метод обновления хеша пароля пользователя
+        // Используется при смене пароля для обновления хеша в базе данных
+        Task UpdatePasswordHashAsync(Guid userId, string newPasswordHash);
+    }
 }
