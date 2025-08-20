@@ -1,111 +1,172 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using OnlineStore.Api.Extensions;
 using OnlineStore.Application.DTOs.Auth;
 using OnlineStore.Application.Interfaces.Services;
+using OnlineStore.Api.Security;             // User.GetUserId()
+using OnlineStore.Infrastructure.Security;  // CookieNames, CookieFactory
 
 namespace OnlineStore.Api.Controllers
 {
     /// <summary>
-    /// Аутентификация: регистрация, логин, профиль, смена пароля, refresh/logout.
+    /// Аутентификация: регистрация/логин, refresh по cookie, управление сессиями.
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    [Produces("application/json")]
-    public sealed class AuthController : ControllerBase
+    public class AuthController : ControllerBase
     {
-        private readonly IAuthService _authService;
+        private readonly IAuthService _auth;
+        private readonly IHostEnvironment _env;
 
-        public AuthController(IAuthService authService) => _authService = authService;
-
-        /// <summary>
-        /// Регистрация нового пользователя.
-        /// Возвращает пару токенов (access + refresh).
-        /// </summary>
-        [HttpPost("register")]
-        [AllowAnonymous]
-        [EnableRateLimiting("ip-register")]
-        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status409Conflict)]
-        public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+        public AuthController(IAuthService auth, IHostEnvironment env)
         {
-            // Валидацию делает FluentValidation; проверку уникальности — сервис
-            var response = await _authService.RegisterAsync(request);
-            return Ok(response); // мы сразу логиним, поэтому 200 OK (а не 201)
+            _auth = auth;
+            _env = env;
         }
 
-        /// <summary>
-        /// Логин по email/паролю.
-        /// Возвращает пару токенов (access + refresh).
-        /// </summary>
-        [HttpPost("login")]
-        [AllowAnonymous]
-        [EnableRateLimiting("ip-login")]
-        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
-        {
-            var response = await _authService.LoginAsync(request);
-            return Ok(response);
-        }
+        // -------- helpers --------
 
-        /// <summary>
-        /// Текущий профиль пользователя (по JWT).
-        /// </summary>
-        [HttpGet("me")]
-        [Authorize] // требуется валидный access-токен
-        [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> Me()
-        {
-            var userId = User.GetUserId();                 // из клейма sub/nameidentifier
-            var profile = await _authService.GetProfileAsync(userId);
-            return Ok(profile);
-        }
-
-        /// <summary>
-        /// Смена пароля текущего пользователя.
-        /// </summary>
-        [HttpPost("change-password")]
-        [Authorize]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
-        {
-            var userId = User.GetUserId();
-            await _authService.ChangePasswordAsync(userId, request);
-            return NoContent();                            // 204 — по REST «успех без тела»
-        }
-
-        /// <summary>
-        /// Обновление пары токенов по действующему refresh-токену (ротация).
-        /// </summary>
-        [HttpPost("refresh")]
-        [AllowAnonymous]
-        [EnableRateLimiting("ip-login")]                   // такой же лимит, как и у логина
-        [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
+        private (string? ip, string? ua) GetClientInfo()
         {
             var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
             var ua = Request.Headers.UserAgent.ToString();
-            var rsp = await _authService.RefreshAsync(request, ip, ua);
-            return Ok(rsp);
+            return (ip, ua);
+        }
+
+        private bool IsProd() => _env.IsProduction();
+
+        // -------- endpoints --------
+
+        /// <summary>Регистрация: access в body, refresh — в HttpOnly cookie.</summary>
+        [HttpPost("register")]
+        [EnableRateLimiting("ip-register")]
+        public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+        {
+            var resp = await _auth.RegisterAsync(request);
+
+            if (!string.IsNullOrWhiteSpace(resp.RefreshToken))
+            {
+                Response.Cookies.Append(
+                    CookieNames.RefreshToken,
+                    resp.RefreshToken,
+                    CookieFactory.Refresh(Request)
+                );
+                resp.RefreshToken = null; // в тело не отдаём
+            }
+
+            return Ok(new AuthResponse { Email = resp.Email, Token = resp.Token });
+        }
+
+        /// <summary>Логин: access в body, refresh — в HttpOnly cookie.</summary>
+        [HttpPost("login")]
+        [EnableRateLimiting("ip-login")]
+        public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
+        {
+            var resp = await _auth.LoginAsync(request);
+
+            if (!string.IsNullOrWhiteSpace(resp.RefreshToken))
+            {
+                Response.Cookies.Append(
+                    CookieNames.RefreshToken,
+                    resp.RefreshToken,
+                    CookieFactory.Refresh(Request)
+                );
+                resp.RefreshToken = null;
+            }
+
+            return Ok(new AuthResponse { Email = resp.Email, Token = resp.Token });
         }
 
         /// <summary>
-        /// Logout: отзыв конкретного refresh-токена.
+        /// Идемпотентный refresh без тела: читает refresh из cookie, возвращает новый access и ротацию refresh-cookie.
         /// </summary>
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        public async Task<ActionResult<AuthResponse>> Refresh()
+        {
+            var raw = Request.Cookies[CookieNames.RefreshToken];
+            if (string.IsNullOrWhiteSpace(raw))
+                return Unauthorized();
+
+            var (ip, ua) = GetClientInfo();
+            var resp = await _auth.RefreshAsync(new RefreshRequest { RefreshToken = raw }, ip, ua);
+
+            if (!string.IsNullOrWhiteSpace(resp.RefreshToken))
+            {
+                Response.Cookies.Append(
+                    CookieNames.RefreshToken,
+                    resp.RefreshToken,
+                    CookieFactory.Refresh(Request)
+                );
+                resp.RefreshToken = null;
+            }
+
+            return Ok(new AuthResponse { Email = resp.Email, Token = resp.Token });
+        }
+
+        /// <summary>Выход из текущей сессии: отзывает refresh и стирает cookie.</summary>
         [HttpPost("logout")]
         [Authorize]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        public async Task<IActionResult> Logout([FromBody] RefreshRequest request)
+        public async Task<IActionResult> Logout()
         {
-            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-            await _authService.LogoutAsync(request.RefreshToken, ip);
+            var raw = Request.Cookies[CookieNames.RefreshToken];
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                var (ip, _) = GetClientInfo();
+                await _auth.LogoutAsync(raw, ip);
+
+                Response.Cookies.Append(
+                    CookieNames.RefreshToken,
+                    string.Empty,
+                    CookieFactory.Expired(Request)
+                );
+            }
+            return NoContent();
+        }
+
+        /// <summary>Закрыть все мои сессии.</summary>
+        [HttpPost("logout-all")]
+        [Authorize]
+        public async Task<IActionResult> LogoutAll()
+        {
+            var (ip, _) = GetClientInfo();
+            await _auth.LogoutAllAsync(User.GetUserId(), ip);
+
+            Response.Cookies.Append(
+                CookieNames.RefreshToken,
+                string.Empty,
+                CookieFactory.ExpiredNow(IsProd())
+            );
+
+            return NoContent();
+        }
+
+        /// <summary>Список моих сессий.</summary>
+        [HttpGet("sessions")]
+        [Authorize]
+        public async Task<ActionResult<List<SessionDto>>> Sessions()
+        {
+            var list = await _auth.GetSessionsAsync(User.GetUserId());
+            return Ok(list);
+        }
+
+        /// <summary>Закрыть конкретную мою сессию по Id refresh-токена.</summary>
+        [HttpDelete("sessions/{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> CloseSession(Guid id)
+        {
+            var (ip, _) = GetClientInfo();
+            await _auth.LogoutSessionAsync(User.GetUserId(), id, ip);
+            return NoContent();
+        }
+
+        /// <summary>[Admin] Закрыть все сессии указанного пользователя.</summary>
+        [HttpPost("admin/logout-all/{userId:guid}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AdminLogoutAll(Guid userId)
+        {
+            var (ip, _) = GetClientInfo();
+            await _auth.LogoutAllAsync(userId, ip);
             return NoContent();
         }
     }

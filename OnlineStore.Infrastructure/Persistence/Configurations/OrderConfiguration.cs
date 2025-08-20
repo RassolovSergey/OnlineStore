@@ -27,6 +27,8 @@ namespace OnlineStore.Infrastructure.Persistence.Configurations
                             .WithMany(u => u.Orders)
                             .HasForeignKey(o => o.UserId)
                             .OnDelete(DeleteBehavior.Restrict);
+                            
+                     builder.HasQueryFilter(o => o.User != null && !o.User.IsDeleted);
 
                      // Коллекция OrderItems уже объявлена в Order — связи зададим в конфиге OrderItem
                      builder.HasIndex(o => o.UserId);

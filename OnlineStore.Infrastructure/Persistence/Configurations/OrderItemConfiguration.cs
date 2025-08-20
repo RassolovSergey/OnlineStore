@@ -55,6 +55,10 @@ namespace OnlineStore.Infrastructure.Persistence.Configurations
                      builder.HasIndex(oi => oi.OrderId);
                      builder.HasIndex(oi => oi.Model3DId).HasFilter("model3d_id IS NOT NULL");
                      builder.HasIndex(oi => oi.ProjectId).HasFilter("project_id IS NOT NULL");
+
+                     builder.HasQueryFilter(oi => oi.Order != null
+                          && oi.Order.User != null
+                          && !oi.Order.User.IsDeleted);
               }
        }
 }

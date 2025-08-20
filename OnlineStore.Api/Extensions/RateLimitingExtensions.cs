@@ -14,7 +14,7 @@ namespace OnlineStore.Api.Extensions
     public static class RateLimitingExtensions
     {
         /// <summary>
-        /// Регистрирует политики лимитов для /auth/login и /auth/register (пер-IP), 
+        /// Регистрирует политики лимитов для /auth/login и /auth/register (пер-IP),
         /// а также единый обработчик 429 в формате ProblemDetails.
         /// </summary>
         public static IServiceCollection AddAuthRateLimiting(this IServiceCollection services)

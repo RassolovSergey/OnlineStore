@@ -298,12 +298,18 @@ namespace OnlineStore.Infrastructure.Services
         /// </summary>
         private string GenerateJwt(User user)
         {
-            var claims = new[]
+            var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
             };
+
+            if (user.IsAdmin)
+            {
+                // Ключевой момент для [Authorize(Roles="Admin")]
+                claims.Add(new Claim(ClaimTypes.Role, "Admin"));
+            }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.Key));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -318,6 +324,100 @@ namespace OnlineStore.Infrastructure.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        public async Task<IReadOnlyList<SessionDto>> GetSessionsAsync(Guid userId)
+        {
+            var list = await _rtRepo.GetActiveByUserAsync(userId); // добавим в репозиторий
+            return list.Select(t => new SessionDto
+            {
+                Id = t.Id,
+                CreatedAt = t.CreatedAt,
+                ExpiresAt = t.ExpiresAt,
+                CreatedByIp = t.CreatedByIp,
+                CreatedByUa = t.CreatedByUa,
+                IsActive = t.IsActive,
+                IsCurrent = false // отметим в контроллере
+            }).ToList();
+        }
+
+        public async Task LogoutAllAsync(Guid userId, string? ip = null)
+        {
+            await _rtRepo.RevokeAllForUserAsync(userId, ip);
+            await _db.SaveChangesAsync();
+        }
+
+        public async Task LogoutSessionAsync(Guid userId, Guid tokenId, string? ip = null)
+        {
+            var token = await _rtRepo.GetByIdAsync(tokenId)
+                ?? throw new NotFoundException("Сессия не найдена.");
+
+            if (token.UserId != userId)
+                throw new UnauthorizedAppException("Доступ запрещён.");
+
+            if (token.RevokedAt is null)
+                await _rtRepo.RevokeAsync(token, ip);
+
+            await _db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Вернуть список активных сессий (refresh-токенов) пользователя.
+        /// </summary>
+        public async Task<IReadOnlyList<SessionDto>> GetSessionsAsync(Guid userId, CancellationToken ct = default)
+        {
+            // Проверим, что пользователь существует (чтобы 404 был корректный)
+            var user = await _users.GetByIdAsync(userId);
+            if (user is null)
+                throw new NotFoundException("Пользователь не найден.");
+
+            var tokens = await _rtRepo.GetActiveByUserAsync(userId, ct);
+
+            // Проекция в DTO
+            var list = tokens.Select(t => new SessionDto
+            {
+                Id = t.Id,
+                CreatedAt = t.CreatedAt,
+                ExpiresAt = t.ExpiresAt,
+                CreatedByIp = t.CreatedByIp,
+                CreatedByUa = t.CreatedByUa,
+                IsActive = t.RevokedAt is null && t.ExpiresAt > DateTime.UtcNow,
+                IsCurrent = false // на шаге 4 можно отметить "текущую" по cookie
+            }).ToList();
+
+            return list;
+        }
+        /// <summary>
+        /// Закрыть все сессии пользователя.
+        /// </summary>
+        public async Task LogoutAllAsync(Guid userId, string? ip = null, CancellationToken ct = default)
+        {
+            // Дополнительно можно проверить владельца/права выше, в контроллере
+            await _rtRepo.RevokeAllForUserAsync(userId, ip);
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Auth: revoked ALL sessions for {UserId} (ip: {IP})", userId, ip);
+        }
+
+        /// <summary>
+        /// Закрыть конкретную сессию пользователя (по Id refresh-токена).
+        /// </summary>
+        public async Task LogoutSessionAsync(Guid userId, Guid tokenId, string? ip = null, CancellationToken ct = default)
+        {
+            var token = await _rtRepo.GetByIdAsync(tokenId, ct)
+                        ?? throw new NotFoundException("Сессия не найдена.");
+
+            // Владелец должен совпадать
+            if (token.UserId != userId)
+                throw new UnauthorizedAppException("Доступ запрещён.");
+
+            if (token.RevokedAt is null)
+            {
+                await _rtRepo.RevokeAsync(token, ip);
+                await _db.SaveChangesAsync(ct);
+
+                _logger.LogInformation("Auth: revoked session {TokenId} for {UserId} (ip: {IP})", tokenId, userId, ip);
+            }
         }
     }
 }

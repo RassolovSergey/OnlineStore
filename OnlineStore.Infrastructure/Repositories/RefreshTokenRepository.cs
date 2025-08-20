@@ -1,43 +1,84 @@
 using Microsoft.EntityFrameworkCore;
+using OnlineStore.Application.Interfaces.Repositories;
 using OnlineStore.Domain.Entities;
 using OnlineStore.Infrastructure.Persistence;
-using OnlineStore.Application.Interfaces.Repositories;
 
 namespace OnlineStore.Infrastructure.Repositories
 {
+    /// <summary>
+    /// Репозиторий refresh-токенов. Хранит только ХЭШ токена.
+    /// </summary>
     public class RefreshTokenRepository : IRefreshTokenRepository
     {
         private readonly AppDbContext _db;
+
         public RefreshTokenRepository(AppDbContext db) => _db = db;
 
-        public Task<RefreshToken?> GetByHashAsync(string tokenHash) =>
-            _db.Set<RefreshToken>().FirstOrDefaultAsync(x => x.TokenHash == tokenHash);
-
-        // Выдать токен
-        public Task AddAsync(RefreshToken token)
+        /// <summary>
+        /// Добавить новый refresh-токен (entity содержит только hash и метаданные).
+        /// SaveChanges выполняется на уровне сервиса.
+        /// </summary>
+        public async Task AddAsync(RefreshToken entity)
         {
-            _db.Set<RefreshToken>().Add(token);
-            return Task.CompletedTask;
+            await _db.RefreshTokens.AddAsync(entity);
         }
 
-        // Отозвать токен
-        public Task RevokeAsync(RefreshToken token, string? ip = null)
+        /// <summary>
+        /// Поиск по хэшу (используется при refresh/login/register).
+        /// </summary>
+        public async Task<RefreshToken?> GetByHashAsync(string hash)
         {
-            token.RevokedAt = DateTime.UtcNow;
-            token.RevokedByIp = ip;
-            return Task.CompletedTask;
+            // IgnoreQueryFilters НЕ нужен: токены удалённых пользователей нам не нужны для user-потока.
+            return await _db.RefreshTokens
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.TokenHash == hash);
         }
 
-        // Метод сохранения, на случай, если где-то нужно локально досохранить.
-        public async Task SaveAsync() => await _db.SaveChangesAsync();
+        /// <summary>
+        /// Получить токен по первичному ключу (для закрытия конкретной сессии в профиле).
+        /// </summary>
+        public async Task<RefreshToken?> GetByIdAsync(Guid id, CancellationToken ct = default)
+        {
+            return await _db.RefreshTokens.FirstOrDefaultAsync(x => x.Id == id, ct);
+        }
 
-        // Отозвать все Токены
-        public async Task RevokeAllForUserAsync(Guid userId, string? ip = null)
+        /// <summary>
+        /// Список активных сессий пользователя (для UI): не отозваны и не истекли.
+        /// </summary>
+        public async Task<IReadOnlyList<RefreshToken>> GetActiveByUserAsync(Guid userId, CancellationToken ct = default)
         {
             var now = DateTime.UtcNow;
-            await _db.Set<RefreshToken>()
-                .Where(t => t.UserId == userId && t.RevokedAt == null && t.ExpiresAt > now)
-                .ExecuteUpdateAsync(up => up
+            return await _db.RefreshTokens
+                .Where(x => x.UserId == userId && x.RevokedAt == null && x.ExpiresAt > now)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync(ct);
+        }
+
+        /// <summary>
+        /// Отозвать один refresh-токен (идемпотентно).
+        /// </summary>
+        public Task RevokeAsync(RefreshToken token, string? ip)
+        {
+            if (token.RevokedAt is null)
+            {
+                token.RevokedAt = DateTime.UtcNow;
+                token.RevokedByIp = ip;
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Отозвать ВСЕ refresh-токены пользователя. 
+        /// ВАЖНО: .IgnoreQueryFilters(), если user уже IsDeleted=true.
+        /// </summary>
+        public async Task RevokeAllForUserAsync(Guid userId, string? ip)
+        {
+            var now = DateTime.UtcNow;
+
+            await _db.RefreshTokens
+                .IgnoreQueryFilters() // чтобы не потерять токены soft-deleted пользователя
+                .Where(x => x.UserId == userId && x.RevokedAt == null && x.ExpiresAt > now)
+                .ExecuteUpdateAsync(s => s
                     .SetProperty(t => t.RevokedAt, now)
                     .SetProperty(t => t.RevokedByIp, ip));
         }

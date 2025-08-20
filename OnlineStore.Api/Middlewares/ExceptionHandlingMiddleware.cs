@@ -21,32 +21,37 @@ namespace OnlineStore.Api.Middlewares
             _logger = logger;
         }
 
-        public async Task Invoke(HttpContext context)
+        public async Task Invoke(HttpContext ctx)
         {
             try
             {
-                await _next(context);
+                await _next(ctx);
             }
-            catch (AppException appEx)
+            catch (UnauthorizedAppException ex)
             {
-                // Логируем без стека как Warning (это бизнес-ошибка, ожидаемая)
-                _logger.LogWarning(appEx, "AppException {Status} at {Path}: {Message}",
-                    (int)appEx.StatusCode, context.Request.Path, appEx.Message);
-
-                var status = (int)appEx.StatusCode;
-                await WriteProblem(context, status, GetTitle(status), appEx.Message);
+                await WriteProblem(ctx, StatusCodes.Status401Unauthorized, "Unauthorized", ex.Message);
+            }
+            catch (ForbiddenAppException ex)
+            {
+                await WriteProblem(ctx, StatusCodes.Status403Forbidden, "Forbidden", ex.Message);
+            }
+            catch (NotFoundException ex)
+            {
+                await WriteProblem(ctx, StatusCodes.Status404NotFound, "Not Found", ex.Message);
+            }
+            catch (ConflictAppException ex)
+            {
+                await WriteProblem(ctx, StatusCodes.Status409Conflict, "Conflict", ex.Message);
             }
             catch (Exception ex)
             {
-                // Логируем со стеком как Error (неожиданная ошибка)
-                _logger.LogError(ex, "Unhandled exception at {Path}", context.Request.Path);
-
-                // В проде лучше не отдавать ex.Message наружу. Можно отдать общее сообщение.
-                const string generic = "Внутренняя ошибка сервера";
-                await WriteProblem(context, StatusCodes.Status500InternalServerError, generic, generic);
+                _logger.LogError(ex, "Unhandled");
+                await WriteProblem(ctx, StatusCodes.Status500InternalServerError, "Server error",
+                    "Произошла непредвиденная ошибка.");
             }
         }
 
+        // Пока не используется, но может пригодиться, оставил.
         private static string GetTitle(int status) => status switch
         {
             StatusCodes.Status400BadRequest => "Некорректный запрос",
@@ -57,8 +62,13 @@ namespace OnlineStore.Api.Middlewares
             _ => "Ошибка"
         };
 
+        // Helper
         private static async Task WriteProblem(HttpContext ctx, int statusCode, string title, string detail)
         {
+            // Заголовки до записи тела
+            ctx.Response.ContentType = MediaTypeNames.Application.ProblemJson;
+            ctx.Response.StatusCode = statusCode;
+
             var problem = new ProblemDetails
             {
                 Type = $"https://httpstatuses.com/{statusCode}",
@@ -67,13 +77,10 @@ namespace OnlineStore.Api.Middlewares
                 Detail = detail,
                 Instance = ctx.Request.Path
             };
-
             problem.Extensions["traceId"] = ctx.TraceIdentifier;
 
-            ctx.Response.ContentType = MediaTypeNames.Application.ProblemJson;
-            ctx.Response.StatusCode = statusCode;
-
-            await ctx.Response.WriteAsync(JsonSerializer.Serialize(problem, JsonOpts));
+            var payload = JsonSerializer.Serialize(problem, JsonOpts);
+            await ctx.Response.WriteAsync(payload);
         }
     }
 }

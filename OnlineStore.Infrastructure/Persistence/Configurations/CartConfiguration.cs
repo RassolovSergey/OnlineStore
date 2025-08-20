@@ -13,6 +13,7 @@ namespace OnlineStore.Infrastructure.Persistence.Configurations
                 tb.HasComment("Корзины пользователей.");
             });
 
+            builder.HasQueryFilter(c => c.User != null && !c.User.IsDeleted);
             builder.HasKey(c => c.Id);
             // 1:1 связь с User настроена в UserConfiguration (FK: Cart.UserId)
         }

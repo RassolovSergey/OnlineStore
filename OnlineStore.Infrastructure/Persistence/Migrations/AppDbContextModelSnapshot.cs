@@ -472,11 +472,31 @@ namespace OnlineStore.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at_utc");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("email");
+
+                    b.Property<bool>("IsAdmin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_admin");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("NormalizedEmail")
                         .IsRequired()
@@ -496,6 +516,9 @@ namespace OnlineStore.Infrastructure.Migrations
                     b.HasIndex("NormalizedEmail")
                         .IsUnique()
                         .HasDatabaseName("ix_users_normalized_email");
+
+                    b.HasIndex("IsDeleted", "IsAdmin")
+                        .HasDatabaseName("ix_users_is_deleted_is_admin");
 
                     b.ToTable("users", null, t =>
                         {

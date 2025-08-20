@@ -19,6 +19,9 @@ namespace OnlineStore.Infrastructure.Persistence
 
             // Подтягиваем ВСЕ конфигурации IEntityTypeConfiguration<> из сборки Infrastructure
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+            // Глобальный фильтр мягкого удаления для пользователей
+            modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
         }
 
         // DbSet'ы для каждой сущности

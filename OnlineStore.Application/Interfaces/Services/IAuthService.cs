@@ -23,5 +23,9 @@ namespace OnlineStore.Application.Interfaces.Services
 
         Task<AuthResponse> RefreshAsync(RefreshRequest request, string? ip = null, string? ua = null);
         Task LogoutAsync(string refreshToken, string? ip = null);
+        Task<IReadOnlyList<SessionDto>> GetSessionsAsync(Guid userId, CancellationToken ct = default);
+        Task LogoutAllAsync(Guid userId, string? ip = null, CancellationToken ct = default);
+        Task LogoutSessionAsync(Guid userId, Guid tokenId, string? ip = null, CancellationToken ct = default);
+
     }
 }

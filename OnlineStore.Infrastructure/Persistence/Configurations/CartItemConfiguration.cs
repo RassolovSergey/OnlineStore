@@ -51,6 +51,10 @@ namespace OnlineStore.Infrastructure.Persistence.Configurations
                             .HasFilter("project_id IS NOT NULL");
 
                      builder.HasIndex(ci => new { ci.CartId, ci.AddedAt });
+
+                     builder.HasQueryFilter(ci => ci.Cart != null
+                           && ci.Cart.User != null
+                           && !ci.Cart.User.IsDeleted);
               }
        }
 }

@@ -6,6 +6,7 @@ C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.deps
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.runtimeconfig.json
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\OnlineStore.Api.xml
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\AutoMapper.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\AutoMapper.Extensions.Microsoft.DependencyInjection.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\bin\Debug\net9.0\EFCore.NamingConventions.dll
@@ -148,6 +149,7 @@ C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\staticwebassets.buil
 C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\OnlineSt.6791A78F.Up2Date
 C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\OnlineStore.Api.dll
 C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\refint\OnlineStore.Api.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\OnlineStore.Api.xml
 C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\OnlineStore.Api.pdb
 C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\OnlineStore.Api.genruntimeconfig.cache
 C:\Pet-Project\OnlineStore\OnlineStore.Api\obj\Debug\net9.0\ref\OnlineStore.Api.dll
