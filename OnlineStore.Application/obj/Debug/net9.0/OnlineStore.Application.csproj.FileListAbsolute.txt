@@ -1,0 +1,16 @@
+C:\Pet-Project\OnlineStore\OnlineStore.Application\bin\Debug\net9.0\OnlineStore.Application.deps.json
+C:\Pet-Project\OnlineStore\OnlineStore.Application\bin\Debug\net9.0\OnlineStore.Application.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Application\bin\Debug\net9.0\OnlineStore.Application.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Application\bin\Debug\net9.0\OnlineStore.Domain.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Application\bin\Debug\net9.0\OnlineStore.Domain.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.csproj.AssemblyReference.cache
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.AssemblyInfoInputs.cache
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.AssemblyInfo.cs
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.csproj.CoreCompileInputs.cache
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.sourcelink.json
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineSt.92656711.Up2Date
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\refint\OnlineStore.Application.dll
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\OnlineStore.Application.pdb
+C:\Pet-Project\OnlineStore\OnlineStore.Application\obj\Debug\net9.0\ref\OnlineStore.Application.dll
