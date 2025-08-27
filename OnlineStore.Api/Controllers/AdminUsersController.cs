@@ -1,30 +1,46 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OnlineStore.Infrastructure.Persistence;
+using OnlineStore.Application.Interfaces.Services;
+
+namespace OnlineStore.Api.Controllers;
 
 [ApiController]
 [Route("api/admin/users")]
 [Authorize(Roles = "Admin")]
-public class AdminUsersController : ControllerBase
+public sealed class AdminUsersController : ControllerBase
 {
-    private readonly AppDbContext _db; // или IUserRepository
-    public AdminUsersController(AppDbContext db) => _db = db;
+    private readonly IUsersService _usersService;
 
-    [HttpPost("{userId:guid}/make-admin")]
-    public async Task<IActionResult> MakeAdmin(Guid userId)
+    public AdminUsersController(IUsersService usersService)
     {
-        var u = await _db.Users.FindAsync(userId);
-        if (u is null) return NotFound();
-        if (!u.IsAdmin) { u.IsAdmin = true; await _db.SaveChangesAsync(); }
+        _usersService = usersService;
+    }
+
+    [HttpPost("{id:guid}/make-admin")]
+    public async Task<IActionResult> MakeAdmin([FromRoute] Guid id, CancellationToken ct)
+    {
+        await _usersService.MakeAdminAsync(id, ct);
         return NoContent();
     }
 
-    [HttpPost("{userId:guid}/remove-admin")]
-    public async Task<IActionResult> RemoveAdmin(Guid userId)
+    [HttpPost("{id:guid}/remove-admin")]
+    public async Task<IActionResult> RemoveAdmin([FromRoute] Guid id, CancellationToken ct)
     {
-        var u = await _db.Users.FindAsync(userId);
-        if (u is null) return NotFound();
-        if (u.IsAdmin) { u.IsAdmin = false; await _db.SaveChangesAsync(); }
+        await _usersService.RemoveAdminAsync(id, ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/soft-delete")]
+    public async Task<IActionResult> SoftDelete([FromRoute] Guid id, CancellationToken ct)
+    {
+        await _usersService.SoftDeleteAsync(id, ct);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/restore")]
+    public async Task<IActionResult> Restore([FromRoute] Guid id, CancellationToken ct)
+    {
+        await _usersService.RestoreAsync(id, ct);
         return NoContent();
     }
 }

@@ -12,9 +12,9 @@ namespace OnlineStore.Domain.Entities
         public string PasswordHash { get; set; } = null!;   // Пороль пользователя
         public DateTime CreatedAt { get; set; } // Дата регистрации пользователя
         public bool IsAdmin { get; set; }   // Флаг Администратора
-        public bool IsDeleted { get; set; } // МЯгкое удаление
+        public bool IsDeleted { get; set; } // Мягкое удаление
         public DateTime? DeletedAtUtc { get; set; } // Дата удаления
-        public Guid? DeletedBy { get; set; }    // Кем удалён (ид юзера/админа)
+        public Guid? DeletedBy { get; set; }    // Кем удалён (Id юзера/админа)
 
         // Связи
         public Cart Cart { get; set; } = null!; // 1:1 связь с сущностью Cart

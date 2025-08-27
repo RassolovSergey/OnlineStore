@@ -13,11 +13,12 @@ namespace OnlineStore.Infrastructure.Extensions
     {
         public static IServiceCollection AddInfrastructure(this IServiceCollection services)
         {
-            // Репозитории, которые УЖЕ существуют
+            // Репозитории
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
-            // Инфраструктурные сервисы (если AuthService перенесён в Infrastructure/Services)
+            // Сервисы
+            services.AddScoped<IUsersService, UsersService>();
             services.AddScoped<IAuthService, AuthService>();
 
             // Вспомогательные зависимости

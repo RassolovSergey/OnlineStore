@@ -27,9 +27,13 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
 });
 
-// 5) Контроллеры + маппинги
-builder.Services.AddControllers()
-    .AddJsonOptions(_ => { /* при необходимости — настройки сериализации */ });
+// 5) Контроллеры + маппинги. Так же прячем значения равные null из файла json
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(opst =>
+    {
+        opst.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    });
 
 builder.Services.AddMappings(); // AutoMapper профили из Application
 
@@ -51,12 +55,6 @@ builder.Services.AddCors(opt =>
          .AllowCredentials());
 });
 
-// Прячем значения равные null из файла json
-builder.Services.AddControllers()
-    .AddJsonOptions(o =>
-    {
-        o.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
-    });
 var app = builder.Build();
 
 // 8) За обратным прокси / nginx — корректно получаем реальный IP и схему
