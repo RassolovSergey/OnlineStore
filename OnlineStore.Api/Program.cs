@@ -55,9 +55,34 @@ builder.Services.AddCors(opt =>
          .AllowCredentials());
 });
 
+// Опции для AdminSeed (см. ниже)
+builder.Services.Configure<AdminSeedOptions>(builder.Configuration.GetSection("AdminSeed"));
+
 var app = builder.Build();
 
-// 8) За обратным прокси / nginx — корректно получаем реальный IP и схему
+// 8) Авто-миграция БД при старте (в Docker-контейнере или при локальном запуске)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+}
+
+// 8.1) Сидирование админа (если настроено). В отдельном scope, т.к. внутри
+//     могут быть другие сервисы с временем жизни Scoped.
+using (var scope = app.Services.CreateScope())
+{
+    var sp = scope.ServiceProvider;
+
+    // авто-миграции
+    var db = sp.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+
+    // сидирование админа (если настроено)
+    await DbSeeder.SeedAdminAsync(sp);
+}
+
+
+// 9) За обратным прокси / nginx — корректно получаем реальный IP и схему
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
@@ -65,10 +90,10 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     // или KnownNetworks = { new(IPAddress.Parse("10.0.0.0"), 8) }
 });
 
-// 9) Глобальный обработчик ошибок — как можно выше в пайплайне
+// 10) Глобальный обработчик ошибок — как можно выше в пайплайне
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// 10) Swagger — в Dev/Local
+// 11) Swagger — в Dev/Local
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:15
+    container_name: store-db
+    environment:
+      POSTGRES_DB: OnlineStoreDb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
+    # Вариант с пробросом порта на хост (PgAdmin/DBeaver):
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d OnlineStoreDb"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+
+  api:
+    build:
+      context: .
+      dockerfile: OnlineStore.Api/Dockerfile
+    container_name: store-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=OnlineStoreDb;Username=postgres;Password=${POSTGRES_PASSWORD:-pass}
+      ASPNETCORE_ENVIRONMENT: Development
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: OnlineStore
+      Jwt__Audience: OnlineStore
+      Cors__Origins: http://localhost:3000;http://localhost:5173
+    ports:
+      - "5232:8080"
+    volumes:
+      - dataprotection:/root/.aspnet/DataProtection-Keys
+
+volumes:
+  db:
+  dataprotection:
