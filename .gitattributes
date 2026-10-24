@@ -1,0 +1,6 @@
+# Keep generated coverage output out of language statistics.
+coveragereport/** linguist-generated=true
+**/obj/** linguist-generated=true
+**/bin/** linguist-generated=true
+project-code.txt linguist-generated=true
+project-files.txt linguist-generated=true
