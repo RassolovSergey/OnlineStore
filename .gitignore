@@ -482,3 +482,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Generated coverage and code snapshots
+coveragereport/
+project-code.txt
+project-files.txt
