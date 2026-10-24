@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/header.svg" alt=".NET Auth API" width="100%"></p>
+
 # .NET Auth API
 
 **Учебный backend-проект на ASP.NET Core: авторизация, пользователи и управление сессиями.**
